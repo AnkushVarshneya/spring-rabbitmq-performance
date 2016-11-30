@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.amqp.core.DirectExchange;
 import org.springframework.amqp.core.Exchange;
 import org.springframework.amqp.rabbit.core.RabbitManagementTemplate;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
@@ -23,8 +24,9 @@ public class SpringRabbitmqPerformanceApplication {
 
   @Value("${exchange.name:e1}")
   private String exchange_name;
-  
-  @Value("${queue}")
+
+  @Autowired
+  private RabbitTemplate rabbitTemplate;
 
   @Autowired
   private RabbitManagementTemplate rabbitManagementTemplate;
@@ -33,32 +35,19 @@ public class SpringRabbitmqPerformanceApplication {
   public CommandLineRunner commandLineRunner() {
     return (args) -> {
       // durable and non-autodelete
-      initTest();
+      for (;;)
+        // initTest();
+        sendMessage();
+      // muti thread and randomly send message via rk-x-x
     };
   }
-  // remove exchange
 
   private void initTest() {
-    addExchange();
-    addQueues();
+    sendMessage();
   }
 
-  private void addQueues() {
-    
+  private void sendMessage() {
+    rabbitTemplate.convertAndSend(exchange_name, "rk-1-1", "hellowolrd");
+    rabbitTemplate.receive("q1");
   }
-
-  private void addExchange() {
-    Exchange exchange = rabbitManagementTemplate.getExchange(exchange_name);
-    if (exchange != null) {
-      logger.info("found duplicated exchange which will be removed");
-      rabbitManagementTemplate.deleteExchange(exchange);
-    }
-    rabbitManagementTemplate.addExchange(new DirectExchange(exchange_name));
-    logger.info("add new exchange:" + exchange_name);
-  }
-
-  // create exchange
-  // remove queues
-  // create queues
-
 }

@@ -3,25 +3,18 @@ package com.genband.example;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.core.AmqpAdmin;
-import org.springframework.amqp.core.Binding;
-import org.springframework.amqp.core.BindingBuilder;
-import org.springframework.amqp.core.DirectExchange;
-import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory;
 import org.springframework.amqp.rabbit.connection.CachingConnectionFactory;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.rabbit.core.RabbitAdmin;
 import org.springframework.amqp.rabbit.core.RabbitManagementTemplate;
+import org.springframework.amqp.rabbit.core.RabbitMessagingTemplate;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
 public class RabbitMQConfiguration {
-  public static final String QUEUE_NAME_MESSAGE = "queue.message";
-  public static final String TOPIC_EXCHANGE_NAME = "exchange_test";
-  public static final String ALTERNATIVE_EXCHANGE_NAME = "alternative_exchange";
-  public static final String ALTERNATIVE_QUEUE_NAME = "alternative_queue";
   public static final String DIRECT_EXCHANGE_NAME = "direct_exchange_name";
   public static final String ROUNTING_KEY_1 = "key1";
 
@@ -32,7 +25,7 @@ public class RabbitMQConfiguration {
 
   @Bean
   public ConnectionFactory connectionFactory() {
-    CachingConnectionFactory connectionFactory = new CachingConnectionFactory(IP, 32158);
+    CachingConnectionFactory connectionFactory = new CachingConnectionFactory(IP);
     connectionFactory.setUsername("guest");
     connectionFactory.setPassword("guest");
     return connectionFactory;
@@ -58,18 +51,9 @@ public class RabbitMQConfiguration {
   }
 
   @Bean
-  public Queue queueMessage() {
-    return new Queue(QUEUE_NAME_MESSAGE, false, false, true);
-  }
-
-  @Bean
-  public DirectExchange directExchange() {
-    return new DirectExchange(DIRECT_EXCHANGE_NAME, false, true);
-  }
-
-  @Bean
-  public Binding bindingExchangeMessage(Queue queueMessage, DirectExchange exchange) {
-    return BindingBuilder.bind(queueMessage).to(exchange).with(ROUNTING_KEY_1);
+  public RabbitMessagingTemplate rabbitMessagingTemplate() {
+    RabbitMessagingTemplate template = new RabbitMessagingTemplate(rabbitTemplate());
+    return template;
   }
 
   @Bean
