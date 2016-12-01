@@ -3,11 +3,6 @@ package com.genband.example;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Random;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
-
-import javax.print.attribute.standard.NumberOfDocuments;
-import javax.xml.bind.annotation.W3CDomHandler;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,6 +20,7 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Scope;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Component;
 
 @SpringBootApplication
@@ -39,11 +35,11 @@ public class SpringRabbitmqPerformanceApplication {
   @Value("${exchange.name:e1}")
   private String exchange_name;
 
-  @Value("${number.of.queues: 100}")
+  @Value("${number.of.queues:100}")
   private int number_of_queues;
 
   // number of routing keys on each queue
-  @Value("${number.of.routing.keys: 100}")
+  @Value("${number.of.routing.keys:100000}")
   private int number_of_routing_keys;
 
   @Value("${queue.prefix:q}")
@@ -58,6 +54,9 @@ public class SpringRabbitmqPerformanceApplication {
   @Autowired
   private AmqpAdmin amqpAdmin;
 
+  @Autowired
+  private ThreadPoolTaskExecutor taskExecutor;
+
   // http://docs.spring.io/spring-amqp/docs/1.4.5.RELEASE/reference/html/amqp.html
   // 3.2 Connection and Resource Management
   @Bean
@@ -67,12 +66,26 @@ public class SpringRabbitmqPerformanceApplication {
       // initTest();
       System.out.println("number of queues: " + number_of_queues);
       System.out.println("number of routing keys on each queue: " + number_of_routing_keys);
+
       createExchange();
       cleanQueues();
       createQueues();
-      bindQueueToExchangeWithRoutingKey(1, 1, 10);
-
+      bindQueueToExchangeWithRoutingKey(1, 1, number_of_routing_keys);
       // sendMessage();
+      for (;;) {
+        int count = taskExecutor.getActiveCount();
+        System.out.println("Active Threads : " + count);
+        try {
+          Thread.sleep(1000);
+        } catch (InterruptedException e) {
+          e.printStackTrace();
+        }
+        if (count == 0) {
+          taskExecutor.shutdown();
+          System.out.println("binding finished");
+          break;
+        }
+      }
     };
   }
 
@@ -93,10 +106,9 @@ public class SpringRabbitmqPerformanceApplication {
         endQueueIndex = number_of_queues;
       }
       System.out.println("start thread:" + (thread_counter++) + " queue index from "
-          + startQueueIndex + " to  " + endQueueIndex);
-      Thread thread = new Thread(new BindQueueToExchangeWithRoutingKey(startQueueIndex,
-          endQueueIndex, startRoutingKeyIndex, endRoutingKeyIndex));
-      thread.start();
+          + startQueueIndex + " to " + endQueueIndex);
+      taskExecutor.execute(new BindQueueToExchangeWithRoutingKey("T" + thread_counter,
+          startQueueIndex, endQueueIndex, startRoutingKeyIndex, endRoutingKeyIndex));
     }
   }
 
@@ -122,14 +134,16 @@ public class SpringRabbitmqPerformanceApplication {
 
   @Component
   @Scope("prototype")
-  public class BindQueueToExchangeWithRoutingKey extends Thread {
+  private class BindQueueToExchangeWithRoutingKey extends Thread {
+    private String threadName = "";
     private int startQueueIndex = 0;
     private int endQueueIndex = -1;
     private int startRoutingKeyIndex = 0;
     private int endRoutingKeyIndex = -1;
 
-    public BindQueueToExchangeWithRoutingKey(int startQueueIndex, int endQueueIndex,
-        int startRoutingKeyindex, int endRoutingKeyIndex) {
+    public BindQueueToExchangeWithRoutingKey(String threadName, int startQueueIndex,
+        int endQueueIndex, int startRoutingKeyindex, int endRoutingKeyIndex) {
+      this.threadName = threadName;
       this.startQueueIndex = startQueueIndex;
       this.endQueueIndex = endQueueIndex;
       this.startRoutingKeyIndex = startRoutingKeyindex;
@@ -142,12 +156,10 @@ public class SpringRabbitmqPerformanceApplication {
         for (int j = startRoutingKeyIndex; j <= endRoutingKeyIndex; j++) {
           amqpAdmin.declareBinding(new Binding("q" + i, DestinationType.QUEUE, exchange_name,
               "rk-" + i + "-" + j, new HashMap<String, Object>()));
-          System.out
-              .println("bind q" + i + " to " + exchange_name + " with " + "rk-" + i + "-" + j);
+          // System.out
+          // .println("bind q" + i + " to " + exchange_name + " with " + "rk-" + i + "-" + j);
         }
       }
     }
-
   }
-  // TODO clean all queues
 }
