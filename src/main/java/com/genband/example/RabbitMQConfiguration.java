@@ -3,6 +3,9 @@ package com.genband.example;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.core.AmqpAdmin;
+import org.springframework.amqp.core.Message;
+import org.springframework.amqp.core.MessageListener;
+import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory;
 import org.springframework.amqp.rabbit.connection.CachingConnectionFactory;
 import org.springframework.amqp.rabbit.connection.CachingConnectionFactory.CacheMode;
@@ -101,5 +104,24 @@ public class RabbitMQConfiguration {
     listenerContainer.setConcurrentConsumers(10);
     // listenerContainer.setAcknowledgeMode(AcknowledgeMode.NONE);
     return listenerContainer;
+  }
+
+  // @Component
+  public class Receiver {
+    private Logger logger = LoggerFactory.getLogger(Receiver.class);
+
+    // it supports class-level dispatcher as well
+    @RabbitListener(containerFactory = "simpleRabbitListenerContainerFactory", queues = "q1")
+    public void receiveMessage(Message message) {
+      System.out.println(message.getBody());
+    }
+  }
+
+  public class Consumer implements MessageListener {
+
+    @Override
+    public void onMessage(Message message) {
+      // System.out.println(new String(message.getBody()));
+    }
   }
 }
