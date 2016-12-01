@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.amqp.core.AmqpAdmin;
 import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory;
 import org.springframework.amqp.rabbit.connection.CachingConnectionFactory;
+import org.springframework.amqp.rabbit.connection.CachingConnectionFactory.CacheMode;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.rabbit.core.RabbitAdmin;
 import org.springframework.amqp.rabbit.core.RabbitManagementTemplate;
@@ -28,6 +29,9 @@ public class RabbitMQConfiguration {
     CachingConnectionFactory connectionFactory = new CachingConnectionFactory(IP);
     connectionFactory.setUsername("guest");
     connectionFactory.setPassword("guest");
+    // connectionFactory.setConnectionCacheSize(10);
+    connectionFactory.setChannelCacheSize(10);
+    connectionFactory.setCacheMode(CacheMode.CONNECTION);
     return connectionFactory;
   }
 
