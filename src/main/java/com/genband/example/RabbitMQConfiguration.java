@@ -11,21 +11,32 @@ import org.springframework.amqp.rabbit.core.RabbitAdmin;
 import org.springframework.amqp.rabbit.core.RabbitManagementTemplate;
 import org.springframework.amqp.rabbit.core.RabbitMessagingTemplate;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.amqp.rabbit.listener.SimpleMessageListenerContainer;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 @Configuration
 public class RabbitMQConfiguration {
-  public static final String IP = "172.28.250.5";
-  // public static final String IP = "localhost";
+  // 172.28.250.5;
+  @Value("${ip:localhost}")
+  private String IP;
+
+  // 32158
+  @Value("${rabbitmq.port:5672}")
+  private int RABBITMQ_PORT;
+
+  // 32160
+  @Value("${rabbitmq.management.port: 15672}")
+  private int RABBITMQ_MANAGEMENT_PORT;
 
   private Logger logger = LoggerFactory.getLogger(RabbitMQConfiguration.class);
 
   @Bean
   public ConnectionFactory connectionFactory() {
-    CachingConnectionFactory connectionFactory = new CachingConnectionFactory(IP, 32158);
-    // CachingConnectionFactory connectionFactory = new CachingConnectionFactory(IP);
+    // CachingConnectionFactory connectionFactory = new CachingConnectionFactory(IP, 32158);
+    CachingConnectionFactory connectionFactory = new CachingConnectionFactory(IP, RABBITMQ_PORT);
     connectionFactory.setUsername("guest");
     connectionFactory.setPassword("guest");
     connectionFactory.setConnectionCacheSize(120);
@@ -35,8 +46,8 @@ public class RabbitMQConfiguration {
 
   @Bean
   public RabbitManagementTemplate rabbitManagementTemplate() {
-    RabbitManagementTemplate template =
-        new RabbitManagementTemplate("http://guest:guest@" + IP + ":32160/api/");
+    RabbitManagementTemplate template = new RabbitManagementTemplate(
+        "http://guest:guest@" + IP + ":" + RABBITMQ_MANAGEMENT_PORT + "/api/");
     return template;
   }
 
@@ -58,11 +69,12 @@ public class RabbitMQConfiguration {
     return template;
   }
 
+  // combined with @Component and @RabbitListener
   @Bean
   public SimpleRabbitListenerContainerFactory simpleRabbitListenerContainerFactory() {
     SimpleRabbitListenerContainerFactory container = new SimpleRabbitListenerContainerFactory();
     container.setConnectionFactory(connectionFactory());
-    container.setConcurrentConsumers(5);
+    container.setConcurrentConsumers(30);
     return container;
   }
 
@@ -73,5 +85,21 @@ public class RabbitMQConfiguration {
     pool.setMaxPoolSize(200);
     pool.setWaitForTasksToCompleteOnShutdown(true);
     return pool;
+  }
+
+
+  @Bean
+  public SimpleMessageListenerContainer listenerContainer() {
+    SimpleMessageListenerContainer listenerContainer = new SimpleMessageListenerContainer();
+    listenerContainer.setConnectionFactory(connectionFactory());
+
+    for (int i = 1; i <= 50; i++) {
+      listenerContainer.addQueueNames("q" + i);
+    }
+
+    listenerContainer.setMessageListener(new Consumer());
+    listenerContainer.setConcurrentConsumers(10);
+    // listenerContainer.setAcknowledgeMode(AcknowledgeMode.NONE);
+    return listenerContainer;
   }
 }

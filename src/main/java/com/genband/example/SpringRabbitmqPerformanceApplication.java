@@ -13,6 +13,7 @@ import org.springframework.amqp.core.DirectExchange;
 import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.rabbit.core.RabbitManagementTemplate;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.amqp.rabbit.support.CorrelationData;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
@@ -33,17 +34,17 @@ public class SpringRabbitmqPerformanceApplication {
   }
 
   @Value("${exchange.name:e1}")
-  private String exchange_name;
+  public String EXCHANGE_NAME;
 
-  @Value("${number.of.queues:100}")
-  private int number_of_queues;
+  @Value("${number.of.queues:50}")
+  public int NUMBER_OF_QUEUES;
 
   // number of routing keys on each queue
-  @Value("${number.of.routing.keys:100000}")
-  private int number_of_routing_keys;
+  @Value("${number.of.routing.keys:100}")
+  public int NUMBER_OF_ROUTING_KEYS;
 
   @Value("${queue.prefix:q}")
-  private String queue_prefix;
+  public String QUEUE_PREFIX;
 
   @Autowired
   private RabbitTemplate rabbitTemplate;
@@ -64,29 +65,40 @@ public class SpringRabbitmqPerformanceApplication {
     return (args) -> {
       // durable and non-autodelete
       // initTest();
-      System.out.println("number of queues: " + number_of_queues);
-      System.out.println("number of routing keys on each queue: " + number_of_routing_keys);
+      System.out.println("number of queues: " + NUMBER_OF_QUEUES);
+      System.out.println("number of routing keys on each queue: " + NUMBER_OF_ROUTING_KEYS);
 
-      createExchange();
-      cleanQueues();
-      createQueues();
-      bindQueueToExchangeWithRoutingKey(1, 1, number_of_routing_keys);
-      // sendMessage();
-      for (;;) {
-        int count = taskExecutor.getActiveCount();
-        System.out.println("Active Threads : " + count);
-        try {
-          Thread.sleep(1000);
-        } catch (InterruptedException e) {
-          e.printStackTrace();
-        }
-        if (count == 0) {
-          taskExecutor.shutdown();
-          System.out.println("binding finished");
-          break;
-        }
-      }
+      // createExchange_createQueue_BindQueue();
+      sendMessage();
     };
+  }
+
+  private void sendMessage() {
+    for (;;) {
+      // Thread.sleep(100);
+      sendMessageWithRandomRoutingKey();
+    }
+  }
+
+  private void createExchange_createQueue_BindQueue() {
+    createExchange();
+    cleanQueues();
+    createQueues();
+    bindQueueToExchangeWithRoutingKey(1, 1, NUMBER_OF_ROUTING_KEYS);
+    for (;;) {
+      int count = taskExecutor.getActiveCount();
+      System.out.println("Active Threads : " + count);
+      try {
+        Thread.sleep(1000);
+      } catch (InterruptedException e) {
+        e.printStackTrace();
+      }
+      if (count == 0) {
+        taskExecutor.shutdown();
+        System.out.println("binding finished");
+        break;
+      }
+    }
   }
 
   private void cleanQueues() {
@@ -99,11 +111,11 @@ public class SpringRabbitmqPerformanceApplication {
   private void bindQueueToExchangeWithRoutingKey(int interval, int startRoutingKeyIndex,
       int endRoutingKeyIndex) {
     int thread_counter = 1;
-    for (int i = 1; i <= number_of_queues; i = i + interval) {
+    for (int i = 1; i <= NUMBER_OF_QUEUES; i = i + interval) {
       int startQueueIndex = i;
       int endQueueIndex = i + interval - 1;
-      if (endQueueIndex + interval - 1 > number_of_queues) {
-        endQueueIndex = number_of_queues;
+      if (endQueueIndex + interval - 1 > NUMBER_OF_QUEUES) {
+        endQueueIndex = NUMBER_OF_QUEUES;
       }
       System.out.println("start thread:" + (thread_counter++) + " queue index from "
           + startQueueIndex + " to " + endQueueIndex);
@@ -113,23 +125,30 @@ public class SpringRabbitmqPerformanceApplication {
   }
 
   private void createQueues() {
-    for (int i = 1; i <= number_of_queues; i++) {
-      System.out.println("Create queue:" + queue_prefix + i);
-      amqpAdmin.declareQueue(new Queue(queue_prefix + i, true));
+    for (int i = 1; i <= NUMBER_OF_QUEUES; i++) {
+      System.out.println("Create queue:" + QUEUE_PREFIX + i);
+      amqpAdmin.declareQueue(new Queue(QUEUE_PREFIX + i, true));
     }
   }
 
   // no harm if it's same
   private void createExchange() {
-    rabbitManagementTemplate.addExchange(new DirectExchange(exchange_name, true, false));
+    rabbitManagementTemplate.addExchange(new DirectExchange(EXCHANGE_NAME, true, false));
   }
 
   private void sendMessageWithRandomRoutingKey() {
-    int random_queue_number = new Random().nextInt(number_of_queues) + 1;
-    int random_routingKey_number = new Random().nextInt(number_of_routing_keys) + 1;
+    int random_queue_number = new Random().nextInt(NUMBER_OF_QUEUES) + 1;
+    int random_routingKey_number = new Random().nextInt(NUMBER_OF_ROUTING_KEYS) + 1;
     String routingKey = "rk-" + random_queue_number + "-" + random_routingKey_number;
-    System.out.println(routingKey);
-    rabbitTemplate.convertAndSend(exchange_name, routingKey, "helloworld");
+    // System.out.println(routingKey);
+    rabbitTemplate.convertAndSend(EXCHANGE_NAME, routingKey, generatePayload());
+  }
+
+  private Object generatePayload() {
+    return "" + "helloworldhelloworld" + "helloworldhelloworld" + "helloworldhelloworld"
+        + "helloworldhelloworld" + "helloworldhelloworld" + "helloworldhelloworld"
+        + "helloworldhelloworld" + "helloworldhelloworld" + "helloworldhelloworld"
+        + "helloworldhelloworld" + "helloworldhelloworldhelloworldhelloworld";
   }
 
   @Component
@@ -154,7 +173,7 @@ public class SpringRabbitmqPerformanceApplication {
     public void run() {
       for (int i = startQueueIndex; i <= endQueueIndex; i++) {
         for (int j = startRoutingKeyIndex; j <= endRoutingKeyIndex; j++) {
-          amqpAdmin.declareBinding(new Binding("q" + i, DestinationType.QUEUE, exchange_name,
+          amqpAdmin.declareBinding(new Binding("q" + i, DestinationType.QUEUE, EXCHANGE_NAME,
               "rk-" + i + "-" + j, new HashMap<String, Object>()));
           // System.out
           // .println("bind q" + i + " to " + exchange_name + " with " + "rk-" + i + "-" + j);
