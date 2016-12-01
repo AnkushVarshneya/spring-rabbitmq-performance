@@ -1,17 +1,19 @@
 package com.genband.example;
 
-import static org.mockito.Mockito.when;
-
 import java.util.HashMap;
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+
+import javax.print.attribute.standard.NumberOfDocuments;
+import javax.xml.bind.annotation.W3CDomHandler;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.core.AmqpAdmin;
 import org.springframework.amqp.core.Binding;
 import org.springframework.amqp.core.Binding.DestinationType;
-import org.springframework.amqp.core.BindingBuilder;
 import org.springframework.amqp.core.DirectExchange;
 import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.rabbit.core.RabbitManagementTemplate;
@@ -22,6 +24,8 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Scope;
+import org.springframework.stereotype.Component;
 
 @SpringBootApplication
 public class SpringRabbitmqPerformanceApplication {
@@ -63,18 +67,12 @@ public class SpringRabbitmqPerformanceApplication {
       // initTest();
       System.out.println("number of queues: " + number_of_queues);
       System.out.println("number of routing keys on each queue: " + number_of_routing_keys);
-      // createExchange();
-      // cleanQueues();
-      // createQueues();
-      // bindQueueToExchangeWithRoutingKey();
-      for (;;) {
-        // create exchange if it not existed
-        Thread.sleep(100);
-        sendMessageWithRandomRoutingKey();
-      }
+      createExchange();
+      cleanQueues();
+      createQueues();
+      bindQueueToExchangeWithRoutingKey(1, 1, 10);
 
       // sendMessage();
-      // TODO muti thread and randomly send message via rk-x-x
     };
   }
 
@@ -85,16 +83,21 @@ public class SpringRabbitmqPerformanceApplication {
     }
   }
 
-  // rabbitmq management doesn't support
-  private void bindQueueToExchangeWithRoutingKey() {
-    for (int i = 1; i <= number_of_queues; i++) {
-      for (int j = 1; j <= number_of_routing_keys; j++) {
-        amqpAdmin.declareBinding(new Binding("q" + i, DestinationType.QUEUE, exchange_name,
-            "rk-" + i + "-" + j, new HashMap<String, Object>()));
-        System.out.println("bind q" + i + " to " + exchange_name + " with " + "rk-" + i + "-" + j);
+  private void bindQueueToExchangeWithRoutingKey(int interval, int startRoutingKeyIndex,
+      int endRoutingKeyIndex) {
+    int thread_counter = 1;
+    for (int i = 1; i <= number_of_queues; i = i + interval) {
+      int startQueueIndex = i;
+      int endQueueIndex = i + interval - 1;
+      if (endQueueIndex + interval - 1 > number_of_queues) {
+        endQueueIndex = number_of_queues;
       }
+      System.out.println("start thread:" + (thread_counter++) + " queue index from "
+          + startQueueIndex + " to  " + endQueueIndex);
+      Thread thread = new Thread(new BindQueueToExchangeWithRoutingKey(startQueueIndex,
+          endQueueIndex, startRoutingKeyIndex, endRoutingKeyIndex));
+      thread.start();
     }
-
   }
 
   private void createQueues() {
@@ -117,6 +120,34 @@ public class SpringRabbitmqPerformanceApplication {
     rabbitTemplate.convertAndSend(exchange_name, routingKey, "helloworld");
   }
 
-  // TODO multiple thread binding routing-key
+  @Component
+  @Scope("prototype")
+  public class BindQueueToExchangeWithRoutingKey extends Thread {
+    private int startQueueIndex = 0;
+    private int endQueueIndex = -1;
+    private int startRoutingKeyIndex = 0;
+    private int endRoutingKeyIndex = -1;
+
+    public BindQueueToExchangeWithRoutingKey(int startQueueIndex, int endQueueIndex,
+        int startRoutingKeyindex, int endRoutingKeyIndex) {
+      this.startQueueIndex = startQueueIndex;
+      this.endQueueIndex = endQueueIndex;
+      this.startRoutingKeyIndex = startRoutingKeyindex;
+      this.endRoutingKeyIndex = endRoutingKeyIndex;
+    }
+
+    @Override
+    public void run() {
+      for (int i = startQueueIndex; i <= endQueueIndex; i++) {
+        for (int j = startRoutingKeyIndex; j <= endRoutingKeyIndex; j++) {
+          amqpAdmin.declareBinding(new Binding("q" + i, DestinationType.QUEUE, exchange_name,
+              "rk-" + i + "-" + j, new HashMap<String, Object>()));
+          System.out
+              .println("bind q" + i + " to " + exchange_name + " with " + "rk-" + i + "-" + j);
+        }
+      }
+    }
+
+  }
   // TODO clean all queues
 }

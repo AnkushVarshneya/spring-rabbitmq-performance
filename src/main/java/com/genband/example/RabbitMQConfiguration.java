@@ -29,8 +29,7 @@ public class RabbitMQConfiguration {
     CachingConnectionFactory connectionFactory = new CachingConnectionFactory(IP);
     connectionFactory.setUsername("guest");
     connectionFactory.setPassword("guest");
-    // connectionFactory.setConnectionCacheSize(10);
-    connectionFactory.setChannelCacheSize(10);
+    connectionFactory.setConnectionCacheSize(120);
     connectionFactory.setCacheMode(CacheMode.CONNECTION);
     return connectionFactory;
   }
