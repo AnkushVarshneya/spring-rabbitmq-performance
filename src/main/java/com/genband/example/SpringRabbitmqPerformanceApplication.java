@@ -10,12 +10,9 @@ import org.springframework.amqp.core.AmqpAdmin;
 import org.springframework.amqp.core.Binding;
 import org.springframework.amqp.core.Binding.DestinationType;
 import org.springframework.amqp.core.DirectExchange;
-import org.springframework.amqp.core.Message;
-import org.springframework.amqp.core.MessageListener;
 import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.rabbit.core.RabbitManagementTemplate;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
-import org.springframework.amqp.rabbit.support.CorrelationData;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
@@ -42,7 +39,7 @@ public class SpringRabbitmqPerformanceApplication {
   public int NUMBER_OF_QUEUES;
 
   // number of routing keys on each queue
-  @Value("${number.of.routing.keys:100}")
+  @Value("${number.of.routing.keys:10000}")
   public int NUMBER_OF_ROUTING_KEYS;
 
   @Value("${queue.prefix:q}")
@@ -60,13 +57,12 @@ public class SpringRabbitmqPerformanceApplication {
   @Autowired
   private ThreadPoolTaskExecutor taskExecutor;
 
-  // http://docs.spring.io/spring-amqp/docs/1.4.5.RELEASE/reference/html/amqp.html
-  // 3.2 Connection and Resource Management
+  @Autowired
+  private ThreadPoolTaskExecutor sendMessageTaskExecutor;
+
   @Bean
   public CommandLineRunner commandLineRunner() {
     return (args) -> {
-      // durable and non-autodelete
-      // initTest();
       System.out.println("number of queues: " + NUMBER_OF_QUEUES);
       System.out.println("number of routing keys on each queue: " + NUMBER_OF_ROUTING_KEYS);
 
@@ -76,10 +72,8 @@ public class SpringRabbitmqPerformanceApplication {
   }
 
   private void sendMessage() {
-    for (;;) {
-      // Thread.sleep(100);
-      sendMessageWithRandomRoutingKey();
-    }
+    for (int i = 0; i < 1; i++)
+      sendMessageTaskExecutor.execute(new SendMesage());
   }
 
   private void createExchange_createQueue_BindQueue() {
@@ -146,11 +140,27 @@ public class SpringRabbitmqPerformanceApplication {
     rabbitTemplate.convertAndSend(EXCHANGE_NAME, routingKey, generatePayload());
   }
 
+  private void sendMessageWithSpecifiedRoutinKey() {
+    rabbitTemplate.convertAndSend(EXCHANGE_NAME, "rk-1-1", generatePayload());
+    // rabbitTemplate.convertAndSend(EXCHANGE_NAME, "rk-2-1", generatePayload());
+  }
+
   private Object generatePayload() {
     return "" + "helloworldhelloworld" + "helloworldhelloworld" + "helloworldhelloworld"
         + "helloworldhelloworld" + "helloworldhelloworld" + "helloworldhelloworld"
         + "helloworldhelloworld" + "helloworldhelloworld" + "helloworldhelloworld"
         + "helloworldhelloworld" + "helloworldhelloworldhelloworldhelloworld";
+  }
+
+  @Component
+  @Scope("prototype")
+  private class SendMesage extends Thread {
+    @Override
+    public void run() {
+      for (;;)
+        sendMessageWithRandomRoutingKey();
+      // sendMessageWithSpecifiedRoutinKey();
+    }
   }
 
   @Component
